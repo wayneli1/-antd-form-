@@ -1,50 +1,115 @@
-<<<<<<< HEAD
-# Getting Started with Create React App
+📝 CustomForm
+基于React和Ant Design实现的自定义表单组件，使用TypeScript作为开发语言，主要功能是通过配置生成表单项，支持多种表单元素类型和表单验证，提供重置和清空功能。
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+简单易用的API
+支持多种表单元素（Input、Select、DatePicker等）
+支持表单验证
+提供重置和清空功能
+基于TypeScript，提供完整类型定义
+完全兼容Ant Design表单规范
 
-## Available Scripts
+组件
+CustomForm: 自定义表单组件（通过配置快速生成表单，支持多种表单元素和验证规则）
 
-In the project directory, you can run:
+安装
+安装组件
+bashCopynpm i custom-form --save
+# OR
+yarn add custom-form
+安装依赖
+bashCopynpm i antd --save
+# OR
+yarn add antd
+引入组件
+tsxCopyimport React from 'react';
+import CustomForm from 'custom-form';
+import 'antd/dist/antd.css';
+import type { Rule } from 'antd/es/form';
 
-### `npm start`
+// 定义表单项（例子）
+const formItems = [
+  {
+    name: 'username',
+    label: '用户名',
+    component: 'input',
+    rules: [{ required: true, message: '请输入用户名' }] as Rule[]
+  },
+  {
+    name: 'role',
+    label: '角色',
+    component: 'select',
+    options: [
+      { label: '管理员', value: 'admin' },
+      { label: '用户', value: 'user' }
+    ]
+  }
+];
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+// 使用组件
+const App = () => (
+  <CustomForm 
+    formItems={formItems} 
+    onFinish={(values) => console.log(values)} 
+  />
+);
+使用示例
+tsxCopyimport React from 'react';
+import CustomForm from 'custom-form';
+import type { Rule } from 'antd/es/form';
 
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
+const BasicExample = () => {
+  // 定义表单项
+  const formItems = [
+    {
+      name: 'username',
+      label: '用户名',
+      component: 'input',
+      rules: [{ required: true, message: '请输入用户名' }] as Rule[]
+    },
+    {
+      name: 'password',
+      label: '密码',
+      component: 'password',
+      rules: [{ required: true, message: '请输入密码' }] as Rule[]
+    },
+    {
+      name: 'role',
+      label: '角色',
+      component: 'select',
+      options: [
+        { label: '管理员', value: 'admin' },
+        { label: '用户', value: 'user' }
+      ]
+    },
+    {
+      name: 'birthday',
+      label: '生日',
+      component: 'date'
+    },
+    {
+      name: 'description',
+      label: '描述',
+      component: 'textarea'
+    }
+  ];
 
-### `npm test`
+  // 表单提交处理
+  const handleFinish = (values: any) => {
+    console.log('表单数据:', values);
+  };
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
-
-### `npm run build`
-
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
-
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
-
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
-
-### `npm run eject`
-
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
-
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
-
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
-
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-=======
-# -antd-form-
->>>>>>> 61ea7532e0e549f85aba3b6e23f09b513f0e259b
+  return (
+    <CustomForm
+      formItems={formItems}
+      onFinish={handleFinish}
+      showReset={true}
+      showClear={true}
+      initialValues={{ role: 'user' }}
+    />
+  );
+};
+API
+CustomForm
+参数说明类型默认值formItems表单项配置FormItemType[][]onFinish提交表单且数据验证成功后回调事件(values: any) => void-showReset是否显示重置按钮booleantrueshowClear是否显示清空按钮booleantrueinitialValues表单默认值Record<string, any>-
+FormItemType
+参数说明类型默认值name表单项名称string-label表单项标签string-component表单项组件类型'input' | 'password' | 'select' | 'date' | 'textarea'-rules表单项验证规则Rule[]-options下拉选项（仅当component为'select'时有效）{ label: string; value: string | number }[]-
