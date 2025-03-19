@@ -1,18 +1,18 @@
 import React from 'react';
 import { Form, Input, Button, DatePicker, Select } from 'antd';
-import type { Rule } from 'antd/es/form'; // 导入 Rule 类型
-import type { FormInstance } from 'antd/es/form'; // 导入 FormInstance 类型
+import type { Rule } from 'antd/es/form';
+import type { FormInstance } from 'antd/es/form';
 
-// 定义表单项类型（普通字段）
+// 定义普通表单项类型
 type FormItemType = {
   name: string;
   label: string;
   component: 'input' | 'password' | 'select' | 'date' | 'textarea';
   rules?: Rule[];
-  options?: { label: string; value: string | number }[]; // 下拉选项
+  options?: { label: string; value: string | number }[];
 };
 
-// 定义动态表单项类型（ArrayField专用）
+// 定义动态表单项类型
 type ArrayFieldItemType = {
   name: string;
   label: string;
@@ -21,14 +21,14 @@ type ArrayFieldItemType = {
   options?: { label: string; value: string | number }[];
 };
 
-// 定义ArrayField的配置类型
+// 定义ArrayField配置类型
 type ArrayFieldConfig = {
   fields: ArrayFieldItemType[];
   addButtonText?: string;
   removeButtonText?: string;
 };
 
-// 定义组件 Props 类型
+// 定义组件Props类型
 interface CustomFormProps {
   formItems: (FormItemType | { type: 'array'; name: string; config: ArrayFieldConfig })[];
   onFinish: (values: any) => void;
@@ -37,7 +37,21 @@ interface CustomFormProps {
   initialValues?: Record<string, any>;
 }
 
-// ArrayField 组件
+// 异步校验函数（用于username和name）
+const checkNameAvailability = async (_: any, value: string) => {
+  if (!value) {
+    return Promise.reject(new Error('请输入名称'));
+  }
+  const response = await new Promise<{ isAvailable: boolean }>((resolve) =>
+    setTimeout(() => resolve({ isAvailable: value !== 'admin' }), 500) // 模拟后端延迟500ms
+  );
+  if (!response.isAvailable) {
+    return Promise.reject(new Error('名称已被占用'));
+  }
+  return Promise.resolve();
+};
+
+// ArrayField组件（添加状态同步和异步校验）
 const ArrayField: React.FC<{ name: string; config: ArrayFieldConfig }> = ({ name, config }) => {
   return (
     <Form.List name={name}>
@@ -50,7 +64,11 @@ const ArrayField: React.FC<{ name: string; config: ArrayFieldConfig }> = ({ name
                   key={fieldConfig.name}
                   name={[field.name, fieldConfig.name]}
                   label={fieldConfig.label}
-                  rules={fieldConfig.rules}
+                  rules={
+                    fieldConfig.name === 'name'
+                      ? [{ required: true, message: '请输入姓名' }, { validator: checkNameAvailability }]
+                      : fieldConfig.rules
+                  }
                   style={{ marginRight: 16 }}
                 >
                   {fieldConfig.component === 'input' && <Input />}
@@ -68,6 +86,26 @@ const ArrayField: React.FC<{ name: string; config: ArrayFieldConfig }> = ({ name
                   {fieldConfig.component === 'textarea' && <Input.TextArea />}
                 </Form.Item>
               ))}
+              {/* 状态同步：当“关系”为“家人”时显示“亲属称呼” */}
+              <Form.Item
+                noStyle
+                shouldUpdate={(prev, curr) =>
+                  prev[name]?.[field.name]?.relationship !== curr[name]?.[field.name]?.relationship
+                }
+              >
+                {({ getFieldValue }) =>
+                  getFieldValue([name, field.name, 'relationship']) === 'family' ? (
+                    <Form.Item
+                      name={[field.name, 'familyTitle']}
+                      label="亲属称呼"
+                      rules={[{ required: true, message: '请输入亲属称呼' }]}
+                      style={{ marginRight: 16 }}
+                    >
+                      <Input placeholder="请输入亲属称呼" />
+                    </Form.Item>
+                  ) : null
+                }
+              </Form.Item>
               <Button type="link" onClick={() => remove(field.name)}>
                 {config.removeButtonText || '删除'}
               </Button>
@@ -82,6 +120,7 @@ const ArrayField: React.FC<{ name: string; config: ArrayFieldConfig }> = ({ name
   );
 };
 
+// CustomForm组件（添加一键清空和异步校验）
 const CustomForm: React.FC<CustomFormProps> = ({
   formItems,
   onFinish,
@@ -96,22 +135,21 @@ const CustomForm: React.FC<CustomFormProps> = ({
     form.resetFields();
   };
 
-  // 清空表单
+  // 一键清空表单
   const handleClear = () => {
     const emptyValues = formItems.reduce((acc, item) => {
-      acc[item.name] = undefined;
+      if ('type' in item && item.type === 'array') {
+        acc[item.name] = []; // 动态字段清空为数组
+      } else {
+        acc[item.name] = undefined; // 普通字段清空为undefined
+      }
       return acc;
-    }, {} as Record<string, undefined>);
+    }, {} as Record<string, any>);
     form.setFieldsValue(emptyValues);
   };
 
   return (
-    <Form
-      form={form}
-      layout="vertical"
-      onFinish={onFinish}
-      initialValues={initialValues}
-    >
+    <Form form={form} layout="vertical" onFinish={onFinish} initialValues={initialValues}>
       {formItems.map((item) =>
         'type' in item && item.type === 'array' ? (
           <ArrayField key={item.name} name={item.name} config={item.config} />
@@ -120,7 +158,11 @@ const CustomForm: React.FC<CustomFormProps> = ({
             key={item.name}
             label={item.label}
             name={item.name}
-            rules={item.rules}
+            rules={
+              item.name === 'username'
+                ? [{ required: true, message: '请输入用户名' }, { validator: checkNameAvailability }]
+                : item.rules
+            }
           >
             {item.component === 'input' && <Input />}
             {item.component === 'password' && <Input.Password />}
@@ -138,7 +180,6 @@ const CustomForm: React.FC<CustomFormProps> = ({
           </Form.Item>
         )
       )}
-
       <Form.Item>
         <Button type="primary" htmlType="submit">
           提交
