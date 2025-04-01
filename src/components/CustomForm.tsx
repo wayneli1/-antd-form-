@@ -3,32 +3,26 @@ import { Form, Input, Button, DatePicker, Select } from 'antd';
 import type { Rule } from 'antd/es/form';
 import type { FormInstance } from 'antd/es/form';
 
-// 定义普通表单项类型
-type FormItemType = {
+// 统一表单项类型
+interface FormItemType {
   name: string;
   label: string;
   component: 'input' | 'password' | 'select' | 'date' | 'textarea';
   rules?: Rule[];
   options?: { label: string; value: string | number }[];
-};
+  validator?: (value: any) => Promise<void>;
+  dependencies?: string[]; // 用于条件渲染
+  renderWhen?: (values: any) => boolean; // 条件渲染逻辑
+}
 
-// 定义动态表单项类型
-type ArrayFieldItemType = {
-  name: string;
-  label: string;
-  component: 'input' | 'password' | 'select' | 'date' | 'textarea';
-  rules?: Rule[];
-  options?: { label: string; value: string | number }[];
-};
-
-// 定义ArrayField配置类型
-type ArrayFieldConfig = {
-  fields: ArrayFieldItemType[];
+// 动态字段配置
+interface ArrayFieldConfig {
+  fields: FormItemType[];
   addButtonText?: string;
   removeButtonText?: string;
-};
+}
 
-// 定义组件Props类型
+// 组件 Props 类型
 interface CustomFormProps {
   formItems: (FormItemType | { type: 'array'; name: string; config: ArrayFieldConfig })[];
   onFinish: (values: any) => void;
@@ -37,90 +31,87 @@ interface CustomFormProps {
   initialValues?: Record<string, any>;
 }
 
-// 异步校验函数（用于username和name）
-const checkNameAvailability = async (_: any, value: string) => {
-  if (!value) {
-    return Promise.reject(new Error('请输入名称'));
-  }
+// 异步校验函数（示例）
+const checkNameAvailability = async (value: string) => {
+  if (!value) throw new Error('请输入名称');
   const response = await new Promise<{ isAvailable: boolean }>((resolve) =>
-    setTimeout(() => resolve({ isAvailable: value !== 'admin' }), 500) // 模拟后端延迟500ms
+    setTimeout(() => resolve({ isAvailable: value !== 'admin' }), 500)
   );
-  if (!response.isAvailable) {
-    return Promise.reject(new Error('名称已被占用'));
-  }
-  return Promise.resolve();
+  if (!response.isAvailable) throw new Error('名称已被占用');
 };
 
-// ArrayField组件（添加状态同步和异步校验）
+// 渲染单个表单项的通用组件
+const RenderFormItem: React.FC<{
+  item: FormItemType;
+  prefix?: string | number; // 用于动态字段的 name 前缀
+}> = ({ item, prefix }) => {
+  const name = prefix !== undefined ? [prefix, item.name] : item.name;
+  const rules = item.validator ? [...(item.rules || []), { validator: (_, v) => item.validator!(v) }] : item.rules;
+
+  return (
+    <Form.Item name={name} label={item.label} rules={rules} dependencies={item.dependencies}>
+      {item.component === 'input' && <Input />}
+      {item.component === 'password' && <Input.Password />}
+      {item.component === 'select' && (
+        <Select>
+          {item.options?.map((opt) => (
+            <Select.Option key={opt.value} value={opt.value}>
+              {opt.label}
+            </Select.Option>
+          ))}
+        </Select>
+      )}
+      {item.component === 'date' && <DatePicker />}
+      {item.component === 'textarea' && <Input.TextArea />}
+    </Form.Item>
+  );
+};
+
+// 动态字段组件
 const ArrayField: React.FC<{ name: string; config: ArrayFieldConfig }> = ({ name, config }) => {
   return (
     <Form.List name={name}>
       {(fields, { add, remove }) => (
-        <>
+        <div style={{ marginBottom: 16 }}>
           {fields.map((field) => (
-            <div key={field.key} style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
+            <div key={field.key} style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
               {config.fields.map((fieldConfig) => (
-                <Form.Item
-                  key={fieldConfig.name}
-                  name={[field.name, fieldConfig.name]}
-                  label={fieldConfig.label}
-                  rules={
-                    fieldConfig.name === 'name'
-                      ? [{ required: true, message: '请输入姓名' }, { validator: checkNameAvailability }]
-                      : fieldConfig.rules
-                  }
-                  style={{ marginRight: 16 }}
-                >
-                  {fieldConfig.component === 'input' && <Input />}
-                  {fieldConfig.component === 'password' && <Input.Password />}
-                  {fieldConfig.component === 'select' && (
-                    <Select>
-                      {fieldConfig.options?.map((opt) => (
-                        <Select.Option key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </Select.Option>
-                      ))}
-                    </Select>
-                  )}
-                  {fieldConfig.component === 'date' && <DatePicker />}
-                  {fieldConfig.component === 'textarea' && <Input.TextArea />}
-                </Form.Item>
-              ))}
-              {/* 状态同步：当“关系”为“家人”时显示“亲属称呼” */}
-              <Form.Item
-                noStyle
-                shouldUpdate={(prev, curr) =>
-                  prev[name]?.[field.name]?.relationship !== curr[name]?.[field.name]?.relationship
-                }
-              >
-                {({ getFieldValue }) =>
-                  getFieldValue([name, field.name, 'relationship']) === 'family' ? (
+                <div key={fieldConfig.name} style={{ flex: 1, marginRight: 16 }}>
+                  {fieldConfig.renderWhen ? (
                     <Form.Item
-                      name={[field.name, 'familyTitle']}
-                      label="亲属称呼"
-                      rules={[{ required: true, message: '请输入亲属称呼' }]}
-                      style={{ marginRight: 16 }}
+                      noStyle
+                      shouldUpdate={(prev, curr) =>
+                        fieldConfig.dependencies?.some(
+                          (dep) => prev[name]?.[field.key]?.[dep] !== curr[name]?.[field.key]?.[dep]
+                        )
+                      }
                     >
-                      <Input placeholder="请输入亲属称呼" />
+                      {({ getFieldValue }) =>
+                        fieldConfig.renderWhen?.(getFieldValue([name, field.name])) ? (
+                          <RenderFormItem item={fieldConfig} prefix={field.name} />
+                        ) : null
+                      }
                     </Form.Item>
-                  ) : null
-                }
-              </Form.Item>
+                  ) : (
+                    <RenderFormItem item={fieldConfig} prefix={field.name} />
+                  )}
+                </div>
+              ))}
               <Button type="link" onClick={() => remove(field.name)}>
                 {config.removeButtonText || '删除'}
               </Button>
             </div>
           ))}
-          <Button type="dashed" onClick={() => add()} style={{ width: '100%', marginBottom: 16 }}>
+          <Button type="dashed" onClick={() => add()} style={{ width: '100%' }}>
             {config.addButtonText || '添加'}
           </Button>
-        </>
+        </div>
       )}
     </Form.List>
   );
 };
 
-// CustomForm组件（添加一键清空和异步校验）
+// 主表单组件
 const CustomForm: React.FC<CustomFormProps> = ({
   formItems,
   onFinish,
@@ -130,19 +121,11 @@ const CustomForm: React.FC<CustomFormProps> = ({
 }) => {
   const [form] = Form.useForm<FormInstance>();
 
-  // 重置表单
-  const handleReset = () => {
-    form.resetFields();
-  };
+  const handleReset = () => form.resetFields();
 
-  // 一键清空表单
   const handleClear = () => {
     const emptyValues = formItems.reduce((acc, item) => {
-      if ('type' in item && item.type === 'array') {
-        acc[item.name] = []; // 动态字段清空为数组
-      } else {
-        acc[item.name] = undefined; // 普通字段清空为undefined
-      }
+      acc['type' in item ? item.name : item.name] = 'type' in item ? [] : undefined;
       return acc;
     }, {} as Record<string, any>);
     form.setFieldsValue(emptyValues);
@@ -151,33 +134,10 @@ const CustomForm: React.FC<CustomFormProps> = ({
   return (
     <Form form={form} layout="vertical" onFinish={onFinish} initialValues={initialValues}>
       {formItems.map((item) =>
-        'type' in item && item.type === 'array' ? (
+        'type' in item ? (
           <ArrayField key={item.name} name={item.name} config={item.config} />
         ) : (
-          <Form.Item
-            key={item.name}
-            label={item.label}
-            name={item.name}
-            rules={
-              item.name === 'username'
-                ? [{ required: true, message: '请输入用户名' }, { validator: checkNameAvailability }]
-                : item.rules
-            }
-          >
-            {item.component === 'input' && <Input />}
-            {item.component === 'password' && <Input.Password />}
-            {item.component === 'select' && (
-              <Select>
-                {item.options?.map((opt) => (
-                  <Select.Option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </Select.Option>
-                ))}
-              </Select>
-            )}
-            {item.component === 'date' && <DatePicker />}
-            {item.component === 'textarea' && <Input.TextArea />}
-          </Form.Item>
+          <RenderFormItem key={item.name} item={item} />
         )
       )}
       <Form.Item>
